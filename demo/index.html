@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="utf-8"/>
+  <!--  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=0"/>-->
+  <meta name="viewport"
+        content="width=device-width,initial-scale=0.5,maximum-scale=0.5,minimum-scale=0.5,user-scalable=0"/>
+  <title>index</title>
+  <link href="style.css" media="all" rel="stylesheet"/>
+</head>
+<body>
+<div id="test"></div>
+<pre><code class="brush:csx"></code></pre>
+<script type="text/jsx">
+  karas.render(
+    <canvas width="360" height="360">
+      <FallingFlower
+        style={{
+          position: 'absolute',
+          left: '50%',
+          top: '50%',
+          width: 360,
+          height: 360,
+          translateX: '-50%',
+          translateY: '-50%',
+        }}
+        list={[{
+          url: 'https://gw.alipayobjects.com/mdn/rms_5f8aad/afts/img/A*W7jURJYPDdgAAAAAAAAAAAAAARQnAQ',
+          x: [0.1, 0.9],
+          y: [-0.1, 0],
+          distance: [1.1, 1.3],
+          deg: [45, 90],
+          origin: [-4, -2],
+          width: [20, 30],
+          // height: 5,
+          duration: [10000, 15000],
+          iterations: [2, 4], // 下落过程分为几个左右来回，默认1
+        }]}
+        interval={1000}
+        intervalNum={1}
+        initNum={2}
+        num={100}
+        delay={100}
+      />
+    </canvas>,
+    '#test'
+  );
+</script>
+<script src="homunculus.js"></script>
+<script src="yurine.js"></script>
+<script src="sea.js"></script>
+<script src="https://gw.alipayobjects.com/os/lib/karas/0.66.9/index.min.js"></script>
+<script src="../index.js"></script>
+<script>
+  seajs.config({
+    alias: {},
+  });
+  define('fs', {});
+  seajs.use(['jssc'], function(jssc) {
+    var code = document.querySelector('pre code');
+    var jsx = document.querySelector('script[type="text/jsx"]');
+    var source = jsx.textContent || jsx.text;
+    source = source.trim().replace(/\n[ ]{2}/g, '\n');
+    var text = document.createTextNode(source);
+    code.appendChild(text);
+    jssc.exec();
+    var head = document.head || document.getElementsByTagName('head')[0];
+    var jsx = document.querySelectorAll('script');
+    for(var i = 0, len = jsx.length; i < len; i++) {
+      var node = jsx[i];
+      if(node.getAttribute('type') === 'text/jsx' && !node.getAttribute('yurine')) {
+        node.setAttribute('yurine', 1);
+        var code = node.textContent || node.text;
+        if(!code) {
+          continue;
+        }
+        code = yurine.parse(code);
+        var script = document.createElement('script');
+        script.async = true;
+        script.text = code;
+        head.appendChild(script);
+      }
+    }
+  });
+</script>
+</body>
+</html>
