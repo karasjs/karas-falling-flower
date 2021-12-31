@@ -7,8 +7,16 @@ const {
       DISPLAY,
       VISIBILITY,
       OPACITY,
-      TRANSFORM_ORIGIN,
     },
+    NODE_KEY: {
+      NODE_REFRESH_LV,
+    },
+  },
+  refresh: {
+    level: {
+      REPAINT,
+    },
+    Cache,
   },
   util: {
     isNil,
@@ -22,7 +30,13 @@ const {
       multiply,
     },
   },
+  mode: {
+    CANVAS,
+    WEBGL,
+  },
 } = karas;
+
+let uuid = 0;
 
 class FallingFlower extends karas.Component {
   constructor(props) {
@@ -46,6 +60,7 @@ class FallingFlower extends karas.Component {
     let i = 0, length = list.length;
     let lastTime = 0, count = 0;
     let fake = this.ref.fake;
+    let hashCache = {}, hashMatrix = {};
     let cb = this.cb = diff => {
       diff *= this.playbackRate;
       if(delay > 0) {
@@ -72,6 +87,8 @@ class FallingFlower extends karas.Component {
         item.time += diff;
         if(item.time >= item.duration) {
           dataList.splice(j, 1);
+          delete hashCache[item.id];
+          delete hashMatrix[item.id];
         }
         else if(item.source) {
           let { x, y, width, height, distance, direction, deg = 90, iterations = 1, time, duration } = item;
@@ -83,6 +100,7 @@ class FallingFlower extends karas.Component {
           item.nowDirection = (count % 2 === 0) ? direction : !direction;
           item.nowX = x - width * 0.5;
           item.nowY = y + dy - height * 0.5;
+          item.loaded = true;
         }
       }
       if(count >= num) {
@@ -117,16 +135,21 @@ class FallingFlower extends karas.Component {
       iterations: Infinity,
       autoPlay,
     });
+    let __config = fake.__config;
+    __config[NODE_REFRESH_LV] = REPAINT;
+    let shadowRoot = this.shadowRoot;
+    let texCache = this.root.texCache;
     fake.render = (renderMode, lv, ctx, cache, dx = 0, dy = 0) => {
+      __config[NODE_REFRESH_LV] = REPAINT;
       let { sx, sy } = fake;
-      let computedStyle = this.computedStyle;
+      let computedStyle = shadowRoot.computedStyle;
       if(computedStyle[DISPLAY] === 'none'
         || computedStyle[VISIBILITY] === 'hidden'
         || computedStyle[OPACITY] <= 0) {
         return;
       }
       dataList.forEach(item => {
-        if(item.source) {
+        if(item.loaded) {
           let x = item.nowX + sx + dx;
           let y = item.nowY + sy + dy;
           let m = this.matrixEvent;
@@ -146,10 +169,49 @@ class FallingFlower extends karas.Component {
           t[1] = sin;
           t[4] = -sin;
           m = multiply([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tfo[0], tfo[1], 0, 1], m);
-          m = multiply(m, t);
-          m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
-          ctx.setTransform(m[0], m[1], m[4], m[5], m[12], m[13]);
-          ctx.drawImage(item.source, x, y, item.width, item.height);
+          if(renderMode === WEBGL) {
+            let cache = hashCache[item.id];
+            if(!cache) {
+              cache = hashCache[item.id] = Cache.getInstance(
+                [x - 1, y - 1, x + item.sourceWidth + 1, y + item.sourceHeight + 1],
+                x, y
+              );
+              cache.ctx.drawImage(item.source, x + cache.dx, y + cache.dy);
+            }
+            else {
+              cache.__bbox = [x - 1, y - 1, x + item.sourceWidth + 1, y + item.sourceHeight + 1];
+              cache.__sx = x;
+              cache.__sy = y;
+            }
+            if(item.width !== item.sourceWidth && item.height !== item.sourceHeight) {
+              let t2 = identity();
+              t2[0] = item.width / item.sourceWidth;
+              t2[5] = item.height / item.sourceHeight;
+              m = multiply(m, t2);
+            }
+            m = multiply(m, t);
+            m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
+            hashMatrix[item.id] = m;
+          }
+          else if(renderMode === CANVAS) {
+            m = multiply(m, t);
+            m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
+            ctx.setTransform(m[0], m[1], m[4], m[5], m[12], m[13]);
+            ctx.drawImage(item.source, x, y, item.width, item.height);
+          }
+        }
+      });
+    };
+    fake.__hookGlRender = function(gl, opacity, cx, cy, dx, dy, revertY) {
+      let computedStyle = shadowRoot.computedStyle;
+      if(computedStyle[DISPLAY] === 'none'
+        || computedStyle[VISIBILITY] === 'hidden'
+        || computedStyle[OPACITY] <= 0) {
+        return;
+      }
+      dataList.forEach(item => {
+        if(item.loaded) {
+          texCache.addTexAndDrawWhenLimit(gl, hashCache[item.id], opacity, hashMatrix[item.id], cx, cy, dx, dy, revertY);
         }
       });
     };
@@ -158,6 +220,7 @@ class FallingFlower extends karas.Component {
   genItem(item) {
     let { width, height } = this;
     let o = {
+      id: uuid++,
       time: 0,
       count: 0,
     };
@@ -225,13 +288,12 @@ class FallingFlower extends karas.Component {
     else if(!isNil(item.iterations)) {
       o.iterations = item.iterations;
     }
-    // if(item.easing) {
-    //   o.easing = karas.animate.easing.getEasing(item.easing);
-    // }
     if(item.url) {
       karas.inject.measureImg(item.url, function(res) {
         if(res.success) {
           o.source = res.source;
+          o.sourceWidth = res.width;
+          o.sourceHeight = res.height;
           if(!(isNil(o.width) && isNil(o.height))) {
             if(isNil(o.width)) {
               o.width = res.width / res.height * o.height;
@@ -275,7 +337,8 @@ class FallingFlower extends karas.Component {
 
   render() {
     return <div>
-      <$polyline ref="fake"/>
+      {/*<img src="https://gw.alipayobjects.com/mdn/rms_5f8aad/afts/img/A*W7jURJYPDdgAAAAAAAAAAAAAARQnAQ"/>*/}
+      <$polyline ref="fake" style={{width:0,visibility:'hidden'}}/>
     </div>;
   }
 }

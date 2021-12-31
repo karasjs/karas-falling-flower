@@ -117,19 +117,27 @@
     };
   }
 
-  var version = "0.0.1";
+  var version = "0.1.0";
 
-  var _karas$enums$STYLE_KE = karas__default["default"].enums.STYLE_KEY,
+  var _karas$enums = karas__default["default"].enums,
+      _karas$enums$STYLE_KE = _karas$enums.STYLE_KEY,
       DISPLAY = _karas$enums$STYLE_KE.DISPLAY,
       VISIBILITY = _karas$enums$STYLE_KE.VISIBILITY,
-      OPACITY = _karas$enums$STYLE_KE.OPACITY;
-      _karas$enums$STYLE_KE.TRANSFORM_ORIGIN;
-      var isNil = karas__default["default"].util.isNil,
+      OPACITY = _karas$enums$STYLE_KE.OPACITY,
+      NODE_REFRESH_LV = _karas$enums.NODE_KEY.NODE_REFRESH_LV,
+      _karas$refresh = karas__default["default"].refresh,
+      REPAINT = _karas$refresh.level.REPAINT,
+      Cache = _karas$refresh.Cache,
+      isNil = karas__default["default"].util.isNil,
       _karas$math = karas__default["default"].math,
       d2r = _karas$math.geom.d2r,
       _karas$math$matrix = _karas$math.matrix,
       identity = _karas$math$matrix.identity,
-      multiply = _karas$math$matrix.multiply;
+      multiply = _karas$math$matrix.multiply,
+      _karas$mode = karas__default["default"].mode,
+      CANVAS = _karas$mode.CANVAS,
+      WEBGL = _karas$mode.WEBGL;
+  var uuid = 0;
 
   var FallingFlower = /*#__PURE__*/function (_karas$Component) {
     _inherits(FallingFlower, _karas$Component);
@@ -183,6 +191,8 @@
         var lastTime = 0,
             count = 0;
         var fake = this.ref.fake;
+        var hashCache = {},
+            hashMatrix = {};
 
         var cb = this.cb = function (diff) {
           diff *= _this2.playbackRate;
@@ -216,6 +226,8 @@
 
             if (item.time >= item.duration) {
               dataList.splice(j, 1);
+              delete hashCache[item.id];
+              delete hashMatrix[item.id];
             } else if (item.source) {
               var x = item.x,
                   y = item.y,
@@ -238,6 +250,7 @@
               item.nowDirection = _count % 2 === 0 ? direction : !direction;
               item.nowX = x - width * 0.5;
               item.nowY = y + dy - height * 0.5;
+              item.loaded = true;
             }
           }
 
@@ -275,20 +288,25 @@
           iterations: Infinity,
           autoPlay: autoPlay
         });
+        var __config = fake.__config;
+        __config[NODE_REFRESH_LV] = REPAINT;
+        var shadowRoot = this.shadowRoot;
+        var texCache = this.root.texCache;
 
         fake.render = function (renderMode, lv, ctx, cache) {
           var dx = arguments.length > 4 && arguments[4] !== undefined ? arguments[4] : 0;
           var dy = arguments.length > 5 && arguments[5] !== undefined ? arguments[5] : 0;
+          __config[NODE_REFRESH_LV] = REPAINT;
           var sx = fake.sx,
               sy = fake.sy;
-          var computedStyle = _this2.computedStyle;
+          var computedStyle = shadowRoot.computedStyle;
 
           if (computedStyle[DISPLAY] === 'none' || computedStyle[VISIBILITY] === 'hidden' || computedStyle[OPACITY] <= 0) {
             return;
           }
 
           dataList.forEach(function (item) {
-            if (item.source) {
+            if (item.loaded) {
               var x = item.nowX + sx + dx;
               var y = item.nowY + sy + dy;
               var m = _this2.matrixEvent;
@@ -308,10 +326,50 @@
               t[1] = sin;
               t[4] = -sin;
               m = multiply([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tfo[0], tfo[1], 0, 1], m);
-              m = multiply(m, t);
-              m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
-              ctx.setTransform(m[0], m[1], m[4], m[5], m[12], m[13]);
-              ctx.drawImage(item.source, x, y, item.width, item.height);
+
+              if (renderMode === WEBGL) {
+                var _cache = hashCache[item.id];
+
+                if (!_cache) {
+                  _cache = hashCache[item.id] = Cache.getInstance([x - 1, y - 1, x + item.sourceWidth + 1, y + item.sourceHeight + 1], x, y);
+
+                  _cache.ctx.drawImage(item.source, x + _cache.dx, y + _cache.dy);
+                } else {
+                  _cache.__bbox = [x - 1, y - 1, x + item.sourceWidth + 1, y + item.sourceHeight + 1];
+                  _cache.__sx = x;
+                  _cache.__sy = y;
+                }
+
+                if (item.width !== item.sourceWidth && item.height !== item.sourceHeight) {
+                  var t2 = identity();
+                  t2[0] = item.width / item.sourceWidth;
+                  t2[5] = item.height / item.sourceHeight;
+                  m = multiply(m, t2);
+                }
+
+                m = multiply(m, t);
+                m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
+                hashMatrix[item.id] = m;
+              } else if (renderMode === CANVAS) {
+                m = multiply(m, t);
+                m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
+                ctx.setTransform(m[0], m[1], m[4], m[5], m[12], m[13]);
+                ctx.drawImage(item.source, x, y, item.width, item.height);
+              }
+            }
+          });
+        };
+
+        fake.__hookGlRender = function (gl, opacity, cx, cy, dx, dy, revertY) {
+          var computedStyle = shadowRoot.computedStyle;
+
+          if (computedStyle[DISPLAY] === 'none' || computedStyle[VISIBILITY] === 'hidden' || computedStyle[OPACITY] <= 0) {
+            return;
+          }
+
+          dataList.forEach(function (item) {
+            if (item.loaded) {
+              texCache.addTexAndDrawWhenLimit(gl, hashCache[item.id], opacity, hashMatrix[item.id], cx, cy, dx, dy, revertY);
             }
           });
         };
@@ -322,6 +380,7 @@
         var width = this.width,
             height = this.height;
         var o = {
+          id: uuid++,
           time: 0,
           count: 0
         };
@@ -389,15 +448,14 @@
           o.iterations = item.iterations[0] + Math.round(Math.random() * (item.iterations[1] - item.iterations[0]));
         } else if (!isNil(item.iterations)) {
           o.iterations = item.iterations;
-        } // if(item.easing) {
-        //   o.easing = karas.animate.easing.getEasing(item.easing);
-        // }
-
+        }
 
         if (item.url) {
           karas__default["default"].inject.measureImg(item.url, function (res) {
             if (res.success) {
               o.source = res.source;
+              o.sourceWidth = res.width;
+              o.sourceHeight = res.height;
 
               if (!(isNil(o.width) && isNil(o.height))) {
                 if (isNil(o.width)) {
@@ -450,7 +508,11 @@
       key: "render",
       value: function render() {
         return karas__default["default"].createElement("div", null, karas__default["default"].createElement("$polyline", {
-          ref: "fake"
+          ref: "fake",
+          style: {
+            width: 0,
+            visibility: 'hidden'
+          }
         }));
       }
     }]);
