@@ -50,6 +50,15 @@ class FallingFlower extends karas.Component {
     return false;
   }
 
+  componentWillUnmount() {
+    Object.keys(this.hashImg || {}).forEach(k => {
+      this.hashImg[k].release();
+    });
+    this.hashCache = {};
+    this.hashMatrix = {};
+    this.hashImg = {};
+  }
+
   componentDidMount() {
     let { props } = this;
     let { list = [], num = 0, initNum = 0, interval = 300, intervalNum = 1, delay = 0, autoPlay } = props;
@@ -60,7 +69,7 @@ class FallingFlower extends karas.Component {
     let i = 0, length = list.length;
     let lastTime = 0, count = 0;
     let fake = this.ref.fake;
-    let hashCache = {}, hashMatrix = {};
+    let hashCache = this.hashCache = {}, hashMatrix = this.hashMatrix = {}, hashImg = this.hashImg = {};
     let cb = this.cb = diff => {
       diff *= this.playbackRate;
       if(delay > 0) {
@@ -172,11 +181,23 @@ class FallingFlower extends karas.Component {
           if(renderMode === WEBGL) {
             let cache = hashCache[item.id];
             if(!cache) {
-              cache = hashCache[item.id] = Cache.getInstance(
-                [x - 1, y - 1, x + item.sourceWidth + 1, y + item.sourceHeight + 1],
-                x, y
-              );
-              cache.ctx.drawImage(item.source, x + cache.dx, y + cache.dy);
+              let url = item.url;
+              if(!hashImg[url]) {
+                cache = hashCache[item.id] = Cache.getInstance(
+                  [x - 1, y - 1, x + item.sourceWidth + 1, y + item.sourceHeight + 1],
+                  x, y
+                );
+                cache.ctx.drawImage(item.source, x + cache.dx, y + cache.dy)
+                hashImg[url] = cache;
+              }
+              else {
+                let c = hashImg[url];
+                cache = hashCache[item.id] = new karas.refresh.Cache(
+                  c.width, c.height,
+                  [x - 1, y - 1, x + item.sourceWidth + 1, y + item.sourceHeight + 1],
+                  c.page, c.pos, x, y
+                );
+              }
             }
             else {
               cache.__bbox = [x - 1, y - 1, x + item.sourceWidth + 1, y + item.sourceHeight + 1];
@@ -223,6 +244,7 @@ class FallingFlower extends karas.Component {
       id: uuid++,
       time: 0,
       count: 0,
+      url: item.url,
     };
     if(Array.isArray(item.x)) {
       o.x = (item.x[0] + Math.random() * (item.x[1] - item.x[0])) * width;

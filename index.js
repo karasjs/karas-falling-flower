@@ -117,7 +117,7 @@
     };
   }
 
-  var version = "0.1.0";
+  var version = "0.1.1";
 
   var _karas$enums = karas__default["default"].enums,
       _karas$enums$STYLE_KE = _karas$enums.STYLE_KEY,
@@ -162,9 +162,21 @@
         return false;
       }
     }, {
+      key: "componentWillUnmount",
+      value: function componentWillUnmount() {
+        var _this2 = this;
+
+        Object.keys(this.hashImg || {}).forEach(function (k) {
+          _this2.hashImg[k].release();
+        });
+        this.hashCache = {};
+        this.hashMatrix = {};
+        this.hashImg = {};
+      }
+    }, {
       key: "componentDidMount",
       value: function componentDidMount() {
-        var _this2 = this;
+        var _this3 = this;
 
         var props = this.props;
         var _props$list = props.list,
@@ -191,11 +203,12 @@
         var lastTime = 0,
             count = 0;
         var fake = this.ref.fake;
-        var hashCache = {},
-            hashMatrix = {};
+        var hashCache = this.hashCache = {},
+            hashMatrix = this.hashMatrix = {},
+            hashImg = this.hashImg = {};
 
         var cb = this.cb = function (diff) {
-          diff *= _this2.playbackRate;
+          diff *= _this3.playbackRate;
 
           if (delay > 0) {
             delay -= diff;
@@ -203,19 +216,19 @@
 
           if (delay <= 0) {
             diff += delay;
-            _this2.time += diff;
+            _this3.time += diff;
             delay = 0;
           } // 如果有初始粒子
 
 
           if (initNum > 0) {
-            lastTime = _this2.time;
+            lastTime = _this3.time;
 
             while (initNum-- > 0) {
               i++;
               i %= length;
               count++;
-              dataList.push(_this2.genItem(list[i]));
+              dataList.push(_this3.genItem(list[i]));
             }
           } // 已有的每个粒子时间增加计算位置，结束的则消失
 
@@ -258,14 +271,14 @@
             return;
           }
 
-          if (_this2.time >= lastTime + interval) {
-            lastTime = _this2.time;
+          if (_this3.time >= lastTime + interval) {
+            lastTime = _this3.time;
 
             for (var _j = 0; _j < intervalNum; _j++) {
               i++;
               i %= length;
               count++;
-              dataList.push(_this2.genItem(list[i]));
+              dataList.push(_this3.genItem(list[i]));
 
               if (count >= num) {
                 break;
@@ -309,7 +322,7 @@
             if (item.loaded) {
               var x = item.nowX + sx + dx;
               var y = item.nowY + sy + dy;
-              var m = _this2.matrixEvent;
+              var m = _this3.matrixEvent;
               var tfo = [x, y + item.origin];
               var r; // 左右摇摆为一个时期，前半在一侧后半在另一侧
 
@@ -331,9 +344,18 @@
                 var _cache = hashCache[item.id];
 
                 if (!_cache) {
-                  _cache = hashCache[item.id] = Cache.getInstance([x - 1, y - 1, x + item.sourceWidth + 1, y + item.sourceHeight + 1], x, y);
+                  var url = item.url;
 
-                  _cache.ctx.drawImage(item.source, x + _cache.dx, y + _cache.dy);
+                  if (!hashImg[url]) {
+                    _cache = hashCache[item.id] = Cache.getInstance([x - 1, y - 1, x + item.sourceWidth + 1, y + item.sourceHeight + 1], x, y);
+
+                    _cache.ctx.drawImage(item.source, x + _cache.dx, y + _cache.dy);
+
+                    hashImg[url] = _cache;
+                  } else {
+                    var c = hashImg[url];
+                    _cache = hashCache[item.id] = new karas__default["default"].refresh.Cache(c.width, c.height, [x - 1, y - 1, x + item.sourceWidth + 1, y + item.sourceHeight + 1], c.page, c.pos, x, y);
+                  }
                 } else {
                   _cache.__bbox = [x - 1, y - 1, x + item.sourceWidth + 1, y + item.sourceHeight + 1];
                   _cache.__sx = x;
@@ -382,7 +404,8 @@
         var o = {
           id: uuid++,
           time: 0,
-          count: 0
+          count: 0,
+          url: item.url
         };
 
         if (Array.isArray(item.x)) {
