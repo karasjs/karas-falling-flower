@@ -11,10 +11,8 @@
 <div id="test"></div>
 <pre><code class="brush:csx"></code></pre>
 <script type="text/jsx">
-  karas.debug = 1;
-
   karas.render(
-    <webgl width="360" height="360">
+    <canvas width="360" height="360">
       <FallingFlower
         style={{
           position: 'absolute',
@@ -43,7 +41,7 @@
         num={100}
         delay={100}
       />
-    </webgl>,
+    </canvas>,
     '#test'
   );
 </script>
