@@ -117,7 +117,7 @@
     };
   }
 
-  var version = "0.1.1";
+  var version = "0.1.2";
 
   var _karas$enums = karas__default["default"].enums,
       _karas$enums$STYLE_KE = _karas$enums.STYLE_KEY,
@@ -291,7 +291,7 @@
           fake.frameAnimate(cb);
         }
 
-        this.animation = fake.animate([{
+        var a = this.animation = fake.animate([{
           opacity: 1
         }, {
           opacity: 0
@@ -309,6 +309,12 @@
         fake.render = function (renderMode, lv, ctx, cache) {
           var dx = arguments.length > 4 && arguments[4] !== undefined ? arguments[4] : 0;
           var dy = arguments.length > 5 && arguments[5] !== undefined ? arguments[5] : 0;
+          var time = a.currentTime - delay;
+
+          if (time < 0) {
+            return;
+          }
+
           __config[NODE_REFRESH_LV] = REPAINT;
           var sx = fake.sx,
               sy = fake.sy;
@@ -404,7 +410,6 @@
         var o = {
           id: uuid++,
           time: 0,
-          count: 0,
           url: item.url
         };
 

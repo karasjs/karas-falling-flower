@@ -149,6 +149,10 @@ class FallingFlower extends karas.Component {
     let shadowRoot = this.shadowRoot;
     let texCache = this.root.texCache;
     fake.render = (renderMode, lv, ctx, cache, dx = 0, dy = 0) => {
+      let time = a.currentTime - delay;
+      if(time < 0) {
+        return;
+      }
       __config[NODE_REFRESH_LV] = REPAINT;
       let { sx, sy } = fake;
       let computedStyle = shadowRoot.computedStyle;
@@ -243,7 +247,6 @@ class FallingFlower extends karas.Component {
     let o = {
       id: uuid++,
       time: 0,
-      count: 0,
       url: item.url,
     };
     if(Array.isArray(item.x)) {
