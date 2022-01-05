@@ -308,14 +308,14 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
         }
 
         __config[NODE_REFRESH_LV] = REPAINT;
-        var sx = fake.sx,
-            sy = fake.sy;
         var computedStyle = shadowRoot.computedStyle;
 
         if (computedStyle[DISPLAY] === 'none' || computedStyle[VISIBILITY] === 'hidden' || computedStyle[OPACITY] <= 0) {
           return;
         }
 
+        var sx = fake.sx,
+            sy = fake.sy;
         dataList.forEach(function (item) {
           if (item.loaded) {
             var x = item.nowX + sx + dx;
@@ -337,6 +337,7 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
             t[1] = sin;
             t[4] = -sin;
             m = multiply([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tfo[0], tfo[1], 0, 1], m);
+            m = multiply(m, t);
 
             if (renderMode === WEBGL) {
               var _cache = hashCache[item.id];
@@ -367,11 +368,9 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
                 m = multiply(m, t2);
               }
 
-              m = multiply(m, t);
               m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
               hashMatrix[item.id] = m;
             } else if (renderMode === CANVAS) {
-              m = multiply(m, t);
               m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
               ctx.setTransform(m[0], m[1], m[4], m[5], m[12], m[13]);
               ctx.drawImage(item.source, x, y, item.width, item.height);
