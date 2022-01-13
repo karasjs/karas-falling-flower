@@ -61,7 +61,7 @@ class FallingFlower extends karas.Component {
 
   componentDidMount() {
     let { props } = this;
-    let { list = [], num = 0, initNum = 0, interval = 300, intervalNum = 1, delay = 0, autoPlay } = props;
+    let { list = [], num = 0, initNum = 0, interval = 300, intervalNum = 1, delay = 0, autoPlay, fps = 60 } = props;
     if(num === 'infinity' || num === 'Infinity') {
       num = Infinity;
     }
@@ -143,9 +143,10 @@ class FallingFlower extends karas.Component {
       delay,
       iterations: Infinity,
       autoPlay,
+      fps,
     });
     let __config = fake.__config;
-    __config[NODE_REFRESH_LV] = REPAINT;
+    __config[NODE_REFRESH_LV] |= REPAINT;
     let shadowRoot = this.shadowRoot;
     let texCache = this.root.texCache;
     fake.render = (renderMode, lv, ctx, cache, dx = 0, dy = 0) => {
@@ -153,7 +154,7 @@ class FallingFlower extends karas.Component {
       if(time < 0) {
         return;
       }
-      __config[NODE_REFRESH_LV] = REPAINT;
+      __config[NODE_REFRESH_LV] |= REPAINT;
       let computedStyle = shadowRoot.computedStyle;
       if(computedStyle[DISPLAY] === 'none'
         || computedStyle[VISIBILITY] === 'hidden'

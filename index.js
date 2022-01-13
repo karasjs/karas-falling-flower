@@ -117,7 +117,7 @@
     };
   }
 
-  var version = "0.1.2";
+  var version = "0.2.0";
 
   var _karas$enums = karas__default["default"].enums,
       _karas$enums$STYLE_KE = _karas$enums.STYLE_KEY,
@@ -191,7 +191,9 @@
             intervalNum = _props$intervalNum === void 0 ? 1 : _props$intervalNum,
             _props$delay = props.delay,
             delay = _props$delay === void 0 ? 0 : _props$delay,
-            autoPlay = props.autoPlay;
+            autoPlay = props.autoPlay,
+            _props$fps = props.fps,
+            fps = _props$fps === void 0 ? 60 : _props$fps;
 
         if (num === 'infinity' || num === 'Infinity') {
           num = Infinity;
@@ -299,10 +301,11 @@
           duration: 1000,
           delay: delay,
           iterations: Infinity,
-          autoPlay: autoPlay
+          autoPlay: autoPlay,
+          fps: fps
         });
         var __config = fake.__config;
-        __config[NODE_REFRESH_LV] = REPAINT;
+        __config[NODE_REFRESH_LV] |= REPAINT;
         var shadowRoot = this.shadowRoot;
         var texCache = this.root.texCache;
 
@@ -315,7 +318,7 @@
             return;
           }
 
-          __config[NODE_REFRESH_LV] = REPAINT;
+          __config[NODE_REFRESH_LV] |= REPAINT;
           var computedStyle = shadowRoot.computedStyle;
 
           if (computedStyle[DISPLAY] === 'none' || computedStyle[VISIBILITY] === 'hidden' || computedStyle[OPACITY] <= 0) {
