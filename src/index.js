@@ -90,72 +90,72 @@ class FallingFlower extends karas.Component {
         diff += delay;
         this.time += diff;
         delay = 0;
-      }
-      // 如果有初始粒子
-      if(initNum > 0) {
-        lastTime = this.time;
-        while(initNum-- > 0) {
-          i++;
-          i %= length;
-          count++;
-          let o = this.genItem(list[i]);
-          maxTime = Math.max(maxTime, currentTime + o.duration);
-          dataList.push(o);
+        // 如果有初始粒子
+        if(initNum > 0) {
+          lastTime = this.time;
+          while(initNum-- > 0) {
+            i++;
+            i %= length;
+            count++;
+            let o = this.genItem(list[i]);
+            maxTime = Math.max(maxTime, currentTime + o.duration);
+            dataList.push(o);
+          }
         }
-      }
-      // 已有的每个粒子时间增加计算位置，结束的则消失
-      for(let j = dataList.length - 1; j >= 0; j--) {
-        let item = dataList[j];
-        item.time += diff;
-        if(item.time >= item.duration) {
-          dataList.splice(j, 1);
-          delete hashCache[item.id];
-          delete hashMatrix[item.id];
+        // 已有的每个粒子时间增加计算位置，结束的则消失
+        for(let j = dataList.length - 1; j >= 0; j--) {
+          let item = dataList[j];
+          item.time += diff;
+          if(item.time >= item.duration) {
+            dataList.splice(j, 1);
+            delete hashCache[item.id];
+            delete hashMatrix[item.id];
+          }
+          else if(item.source) {
+            let { x, y, width, height, distance, direction, iterations = 1, time, duration } = item;
+            let percent = time / duration;
+            let dy = distance * percent;
+            let per = duration / iterations;
+            let count = Math.floor(time / per);
+            item.nowPercent = (time % per) / per;
+            item.nowDirection = (count % 2 === 0) ? direction : !direction;
+            item.nowX = x - width * 0.5;
+            item.nowY = y + dy - height * 0.5;
+            item.loaded = true;
+            hasStart = true;
+          }
         }
-        else if(item.source) {
-          let { x, y, width, height, distance, direction, iterations = 1, time, duration } = item;
-          let percent = time / duration;
-          let dy = distance * percent;
-          let per = duration / iterations;
-          let count = Math.floor(time / per);
-          item.nowPercent = (time % per) / per;
-          item.nowDirection = (count % 2 === 0) ? direction : !direction;
-          item.nowX = x - width * 0.5;
-          item.nowY = y + dy - height * 0.5;
-          item.loaded = true;
-          hasStart = true;
+        // 开始后每次都刷新，即便数据已空，要变成空白初始状态
+        if(hasStart) {
+          fake.clearCache();
+          let p = fake.domParent;
+          while (p) {
+            p.clearCache(true);
+            p = p.domParent;
+          }
+          root.addForceRefreshTask(() => {
+            this.emit('frame');
+          });
         }
-      }
-      // 开始后每次都刷新，即便数据已空，要变成空白初始状态
-      if(hasStart) {
-        fake.clearCache();
-        let p = fake.domParent;
-        while (p) {
-          p.clearCache(true);
-          p = p.domParent;
+        if(count >= this.num) {
+          if(currentTime >= maxTime) {
+            fake.removeFrameAnimate(cb);
+          }
+          return;
         }
-        root.addForceRefreshTask(() => {
-          this.emit('frame');
-        });
-      }
-      if(count >= this.num) {
-        if(currentTime >= maxTime) {
-          fake.removeFrameAnimate(cb);
-        }
-        return;
-      }
-      // 每隔interval开始生成这一阶段的粒子数据
-      if(this.time >= lastTime + this.interval) {
-        lastTime = this.time;
-        for(let j = 0; j < this.intervalNum; j++) {
-          i++;
-          i %= length;
-          count++;
-          let o = this.genItem(list[i]);
-          maxTime = Math.max(maxTime, currentTime + o.duration);
-          dataList.push(o);
-          if(count >= this.num) {
-            break;
+        // 每隔interval开始生成这一阶段的粒子数据
+        if(this.time >= lastTime + this.interval) {
+          lastTime = this.time;
+          for(let j = 0; j < this.intervalNum; j++) {
+            i++;
+            i %= length;
+            count++;
+            let o = this.genItem(list[i]);
+            maxTime = Math.max(maxTime, currentTime + o.duration);
+            dataList.push(o);
+            if(count >= this.num) {
+              break;
+            }
           }
         }
       }
@@ -213,9 +213,10 @@ class FallingFlower extends karas.Component {
           t[0] = t[5] = cos;
           t[1] = sin;
           t[4] = -sin;
-          m = multiply([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tfo[0], tfo[1], 0, 1], m);
           m = multiply(m, t);
           if(renderMode === WEBGL) {
+            // webgl特殊记录，其tfo如果在局部缓存下偏移量要特殊计算，canvas无感知
+            hashTfo[item.id] = tfo;
             let cache = hashCache[item.id];
             if(!cache) {
               let url = item.url;
@@ -247,7 +248,6 @@ class FallingFlower extends karas.Component {
               t2[5] = item.height / item.sourceHeight;
               m = multiply(m, t2);
             }
-            // m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
             hashMatrix[item.id] = m;
             hashOpacity[item.id] = opacity;
           }

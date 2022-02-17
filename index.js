@@ -220,99 +220,98 @@
           if (delay <= 0) {
             diff += delay;
             _this3.time += diff;
-            delay = 0;
-          } // 如果有初始粒子
+            delay = 0; // 如果有初始粒子
+
+            if (initNum > 0) {
+              lastTime = _this3.time;
+
+              while (initNum-- > 0) {
+                i++;
+                i %= length;
+                count++;
+
+                var o = _this3.genItem(list[i]);
+
+                maxTime = Math.max(maxTime, currentTime + o.duration);
+                dataList.push(o);
+              }
+            } // 已有的每个粒子时间增加计算位置，结束的则消失
 
 
-          if (initNum > 0) {
-            lastTime = _this3.time;
+            for (var j = dataList.length - 1; j >= 0; j--) {
+              var item = dataList[j];
+              item.time += diff;
 
-            while (initNum-- > 0) {
-              i++;
-              i %= length;
-              count++;
+              if (item.time >= item.duration) {
+                dataList.splice(j, 1);
+                delete hashCache[item.id];
+                delete hashMatrix[item.id];
+              } else if (item.source) {
+                var x = item.x,
+                    y = item.y,
+                    width = item.width,
+                    height = item.height,
+                    distance = item.distance,
+                    direction = item.direction,
+                    _item$iterations = item.iterations,
+                    iterations = _item$iterations === void 0 ? 1 : _item$iterations,
+                    time = item.time,
+                    duration = item.duration;
+                var percent = time / duration;
+                var dy = distance * percent;
+                var per = duration / iterations;
 
-              var o = _this3.genItem(list[i]);
+                var _count = Math.floor(time / per);
 
-              maxTime = Math.max(maxTime, currentTime + o.duration);
-              dataList.push(o);
-            }
-          } // 已有的每个粒子时间增加计算位置，结束的则消失
-
-
-          for (var j = dataList.length - 1; j >= 0; j--) {
-            var item = dataList[j];
-            item.time += diff;
-
-            if (item.time >= item.duration) {
-              dataList.splice(j, 1);
-              delete hashCache[item.id];
-              delete hashMatrix[item.id];
-            } else if (item.source) {
-              var x = item.x,
-                  y = item.y,
-                  width = item.width,
-                  height = item.height,
-                  distance = item.distance,
-                  direction = item.direction,
-                  _item$iterations = item.iterations,
-                  iterations = _item$iterations === void 0 ? 1 : _item$iterations,
-                  time = item.time,
-                  duration = item.duration;
-              var percent = time / duration;
-              var dy = distance * percent;
-              var per = duration / iterations;
-
-              var _count = Math.floor(time / per);
-
-              item.nowPercent = time % per / per;
-              item.nowDirection = _count % 2 === 0 ? direction : !direction;
-              item.nowX = x - width * 0.5;
-              item.nowY = y + dy - height * 0.5;
-              item.loaded = true;
-              hasStart = true;
-            }
-          } // 开始后每次都刷新，即便数据已空，要变成空白初始状态
+                item.nowPercent = time % per / per;
+                item.nowDirection = _count % 2 === 0 ? direction : !direction;
+                item.nowX = x - width * 0.5;
+                item.nowY = y + dy - height * 0.5;
+                item.loaded = true;
+                hasStart = true;
+              }
+            } // 开始后每次都刷新，即便数据已空，要变成空白初始状态
 
 
-          if (hasStart) {
-            fake.clearCache();
-            var p = fake.domParent;
+            if (hasStart) {
+              fake.clearCache();
+              var p = fake.domParent;
 
-            while (p) {
-              p.clearCache(true);
-              p = p.domParent;
-            }
+              while (p) {
+                p.clearCache(true);
+                p = p.domParent;
+              }
 
-            root.addForceRefreshTask(function () {
-              _this3.emit('frame');
-            });
-          }
-
-          if (count >= _this3.num) {
-            if (currentTime >= maxTime) {
-              fake.removeFrameAnimate(cb);
+              root.addForceRefreshTask(function () {
+                _this3.emit('frame');
+              });
             }
 
-            return;
-          } // 每隔interval开始生成这一阶段的粒子数据
+            if (count >= _this3.num) {
+              if (currentTime >= maxTime) {
+                fake.removeFrameAnimate(cb);
+              }
+
+              return;
+            } // 每隔interval开始生成这一阶段的粒子数据
 
 
-          if (_this3.time >= lastTime + _this3.interval) {
-            lastTime = _this3.time;
+            if (_this3.time >= lastTime + _this3.interval) {
+              lastTime = _this3.time;
 
-            for (var _j = 0; _j < _this3.intervalNum; _j++) {
-              i++;
-              i %= length;
-              count++;
+              for (var _j = 0; _j < _this3.intervalNum; _j++) {
+                i++;
+                i %= length;
+                count++;
 
-              var _o = _this3.genItem(list[i]);
+                var _o = _this3.genItem(list[i]);
 
-              maxTime = Math.max(maxTime, currentTime + _o.duration);
-              dataList.push(_o);
+                maxTime = Math.max(maxTime, currentTime + _o.duration);
+                dataList.push(_o);
 
-              if (count >= _this3.num) {
-                break;
+                if (count >= _this3.num) {
+                  break;
+                }
               }
             }
           }
@@ -381,10 +380,11 @@
               t[0] = t[5] = cos;
               t[1] = sin;
               t[4] = -sin;
-              m = multiply([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tfo[0], tfo[1], 0, 1], m);
               m = multiply(m, t);
 
               if (renderMode === WEBGL) {
+                // webgl特殊记录，其tfo如果在局部缓存下偏移量要特殊计算，canvas无感知
+                hashTfo[item.id] = tfo;
                 var _cache = hashCache[item.id];
 
                 if (!_cache) {
@@ -411,8 +411,7 @@
                   t2[0] = item.width / item.sourceWidth;
                   t2[5] = item.height / item.sourceHeight;
                   m = multiply(m, t2);
-                } // m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
-
+                }
 
                 hashMatrix[item.id] = m;
                 hashOpacity[item.id] = opacity;
