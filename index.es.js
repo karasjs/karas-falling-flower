@@ -30,14 +30,14 @@ function _inherits(subClass, superClass) {
     throw new TypeError("Super expression must either be null or a function");
   }
 
+  subClass.prototype = Object.create(superClass && superClass.prototype, {
+    constructor: {
+      value: subClass,
+      writable: true,
+      configurable: true
+    }
+  });
   Object.defineProperty(subClass, "prototype", {
-    value: Object.create(superClass && superClass.prototype, {
-      constructor: {
-        value: subClass,
-        writable: true,
-        configurable: true
-      }
-    }),
     writable: false
   });
   if (superClass) _setPrototypeOf(subClass, superClass);
@@ -109,7 +109,7 @@ function _createSuper(Derived) {
   };
 }
 
-var version = "0.2.0";
+var version = "0.3.0";
 
 var _karas$enums = karas.enums,
     _karas$enums$STYLE_KE = _karas$enums.STYLE_KEY,
@@ -120,7 +120,9 @@ var _karas$enums = karas.enums,
     _karas$refresh = karas.refresh,
     REPAINT = _karas$refresh.level.REPAINT,
     Cache = _karas$refresh.Cache,
-    isNil = karas.util.isNil,
+    _karas$util = karas.util,
+    isNil = _karas$util.isNil,
+    isFunction = _karas$util.isFunction,
     _karas$math = karas.math,
     d2r = _karas$math.geom.d2r,
     _karas$math$matrix = _karas$math.matrix,
@@ -145,6 +147,9 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
     _this.count = 0;
     _this.time = 0;
     _this.playbackRate = props.playbackRate || 1;
+    _this.interval = props.interval || 300;
+    _this.intervalNum = props.intervalNum || 1;
+    _this.num = props.num || 0;
     return _this;
   }
 
@@ -164,6 +169,8 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
       this.hashCache = {};
       this.hashMatrix = {};
       this.hashImg = {};
+      this.hashOpacity = {};
+      this.hashTfo = {};
     }
   }, {
     key: "componentDidMount",
@@ -173,36 +180,30 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
       var props = this.props;
       var _props$list = props.list,
           list = _props$list === void 0 ? [] : _props$list,
-          _props$num = props.num,
-          num = _props$num === void 0 ? 0 : _props$num,
           _props$initNum = props.initNum,
           initNum = _props$initNum === void 0 ? 0 : _props$initNum,
-          _props$interval = props.interval,
-          interval = _props$interval === void 0 ? 300 : _props$interval,
-          _props$intervalNum = props.intervalNum,
-          intervalNum = _props$intervalNum === void 0 ? 1 : _props$intervalNum,
           _props$delay = props.delay,
           delay = _props$delay === void 0 ? 0 : _props$delay,
-          autoPlay = props.autoPlay,
-          _props$fps = props.fps,
-          fps = _props$fps === void 0 ? 60 : _props$fps;
-
-      if (num === 'infinity' || num === 'Infinity') {
-        num = Infinity;
-      }
-
+          autoPlay = props.autoPlay;
       var dataList = [];
       var i = 0,
           length = list.length;
       var lastTime = 0,
           count = 0;
       var fake = this.ref.fake;
-      var hashCache = this.hashCache = {},
-          hashMatrix = this.hashMatrix = {},
-          hashImg = this.hashImg = {};
+      var root = this.root;
+      var hashCache = this.hashCache = {};
+      var hashMatrix = this.hashMatrix = {};
+      var hashImg = this.hashImg = {};
+      var hashOpacity = this.hashOpacity = {};
+      var hashTfo = this.hashTfo = {};
+      var currentTime = 0,
+          maxTime = 0;
+      var hasStart;
 
       var cb = this.cb = function (diff) {
         diff *= _this3.playbackRate;
+        currentTime += diff;
 
         if (delay > 0) {
           delay -= diff;
@@ -222,7 +223,11 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
             i++;
             i %= length;
             count++;
-            dataList.push(_this3.genItem(list[i]));
+
+            var o = _this3.genItem(list[i]);
+
+            maxTime = Math.max(maxTime, currentTime + o.duration);
+            dataList.push(o);
           }
         } // 已有的每个粒子时间增加计算位置，结束的则消失
 
@@ -241,9 +246,8 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
                 width = item.width,
                 height = item.height,
                 distance = item.distance,
-                direction = item.direction;
-                item.deg;
-                var _item$iterations = item.iterations,
+                direction = item.direction,
+                _item$iterations = item.iterations,
                 iterations = _item$iterations === void 0 ? 1 : _item$iterations,
                 time = item.time,
                 duration = item.duration;
@@ -258,23 +262,48 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
             item.nowX = x - width * 0.5;
             item.nowY = y + dy - height * 0.5;
             item.loaded = true;
+            hasStart = true;
           }
+        } // 开始后每次都刷新，即便数据已空，要变成空白初始状态
+
+
+        if (hasStart) {
+          fake.clearCache();
+          var p = fake.domParent;
+
+          while (p) {
+            p.clearCache(true);
+            p = p.domParent;
+          }
+
+          root.addForceRefreshTask(function () {
+            _this3.emit('frame');
+          });
         }
 
-        if (count >= num) {
+        if (count >= _this3.num) {
+          if (currentTime >= maxTime) {
+            fake.removeFrameAnimate(cb);
+          }
+
           return;
-        }
+        } // 每隔interval开始生成这一阶段的粒子数据
 
-        if (_this3.time >= lastTime + interval) {
+
+        if (_this3.time >= lastTime + _this3.interval) {
           lastTime = _this3.time;
 
-          for (var _j = 0; _j < intervalNum; _j++) {
+          for (var _j = 0; _j < _this3.intervalNum; _j++) {
             i++;
             i %= length;
             count++;
-            dataList.push(_this3.genItem(list[i]));
 
-            if (count >= num) {
+            var _o = _this3.genItem(list[i]);
+
+            maxTime = Math.max(maxTime, currentTime + _o.duration);
+            dataList.push(_o);
+
+            if (count >= _this3.num) {
               break;
             }
           }
@@ -285,17 +314,6 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
         fake.frameAnimate(cb);
       }
 
-      var a = this.animation = fake.animate([{
-        opacity: 1
-      }, {
-        opacity: 0
-      }], {
-        duration: 1000,
-        delay: delay,
-        iterations: Infinity,
-        autoPlay: autoPlay,
-        fps: fps
-      });
       var __config = fake.__config;
       __config[NODE_REFRESH_LV] |= REPAINT;
       var shadowRoot = this.shadowRoot;
@@ -304,7 +322,7 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
       fake.render = function (renderMode, lv, ctx, cache) {
         var dx = arguments.length > 4 && arguments[4] !== undefined ? arguments[4] : 0;
         var dy = arguments.length > 5 && arguments[5] !== undefined ? arguments[5] : 0;
-        var time = a.currentTime - delay;
+        var time = currentTime - delay;
 
         if (time < 0) {
           return;
@@ -319,12 +337,28 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
 
         var sx = fake.sx,
             sy = fake.sy;
+        var globalAlpha;
+
+        if (renderMode === CANVAS) {
+          globalAlpha = ctx.globalAlpha;
+        } else if (renderMode === WEBGL) {
+          globalAlpha = computedStyle[OPACITY];
+        }
+
         dataList.forEach(function (item) {
           if (item.loaded) {
+            var opacity = globalAlpha;
+            opacity *= item.opacity; // 计算位置
+
             var x = item.nowX + sx + dx;
             var y = item.nowY + sy + dy;
-            var m = _this3.matrixEvent;
+            var m = identity();
             var tfo = [x, y + item.origin];
+
+            if (renderMode === CANVAS) {
+              m = multiply([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tfo[0], tfo[1], 0, 1], m);
+            }
+
             var r; // 左右摇摆为一个时期，前半在一侧后半在另一侧
 
             if (item.nowPercent >= 0.5) {
@@ -369,20 +403,34 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
                 t2[0] = item.width / item.sourceWidth;
                 t2[5] = item.height / item.sourceHeight;
                 m = multiply(m, t2);
+              } // m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
+
+
+              hashMatrix[item.id] = m;
+              hashOpacity[item.id] = opacity;
+            } else if (renderMode === CANVAS) {
+              ctx.globalAlpha = opacity; // canvas处理方式不一样，render的dx和dy包含了total的偏移计算考虑，可以无感知
+
+              m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]); // 父级的m
+
+              var pm = _this3.matrixEvent;
+
+              if (pm) {
+                m = multiply(pm, m);
               }
 
-              m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
-              hashMatrix[item.id] = m;
-            } else if (renderMode === CANVAS) {
-              m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
               ctx.setTransform(m[0], m[1], m[4], m[5], m[12], m[13]);
               ctx.drawImage(item.source, x, y, item.width, item.height);
             }
           }
         });
+
+        if (renderMode === CANVAS) {
+          ctx.globalAlpha = globalAlpha;
+        }
       };
 
-      fake.__hookGlRender = function (gl, opacity, cx, cy, dx, dy, revertY) {
+      fake.hookGlRender = function (gl, opacity, matrix, cx, cy, dx, dy, revertY) {
         var computedStyle = shadowRoot.computedStyle;
 
         if (computedStyle[DISPLAY] === 'none' || computedStyle[VISIBILITY] === 'hidden' || computedStyle[OPACITY] <= 0) {
@@ -391,7 +439,19 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
 
         dataList.forEach(function (item) {
           if (item.loaded) {
-            texCache.addTexAndDrawWhenLimit(gl, hashCache[item.id], opacity, hashMatrix[item.id], cx, cy, dx, dy, revertY);
+            var id = item.id;
+            var tfo = hashTfo[id].slice(0);
+            tfo[0] += dx;
+            tfo[1] += dy;
+            var m = hashMatrix[id];
+            m = multiply([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tfo[0], tfo[1], 0, 1], m);
+            m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]); // 父级的m
+
+            if (matrix) {
+              m = multiply(matrix, m);
+            }
+
+            texCache.addTexAndDrawWhenLimit(gl, hashCache[id], hashOpacity[id], m, cx, cy, dx, dy, revertY);
           }
         });
       };
@@ -400,7 +460,8 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
     key: "genItem",
     value: function genItem(item) {
       var width = this.width,
-          height = this.height;
+          height = this.height,
+          props = this.props;
       var o = {
         id: uuid++,
         time: 0,
@@ -485,6 +546,9 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
               } else if (isNil(o.height)) {
                 o.height = o.width * res.height / res.width;
               }
+            } else {
+              o.width = res.width;
+              o.height = res.height;
             }
 
             if (o.height) {
@@ -494,25 +558,21 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
         });
       }
 
+      if (props.hookData && isFunction(props.hookData)) {
+        o = props.hookData(o);
+      }
+
       return o;
     }
   }, {
     key: "pause",
     value: function pause() {
       this.ref.fake.removeFrameAnimate(this.cb);
-
-      if (this.animation) {
-        this.animation.pause();
-      }
     }
   }, {
     key: "resume",
     value: function resume() {
       this.ref.fake.frameAnimate(this.cb);
-
-      if (this.animation) {
-        this.animation.resume();
-      }
     }
   }, {
     key: "play",
@@ -521,9 +581,41 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
       this.time = 0;
       this.ref.fake.removeFrameAnimate(this.cb);
       this.ref.fake.frameAnimate(this.cb);
-
-      if (this.animation) {
-        this.animation.play();
+    }
+  }, {
+    key: "playbackRate",
+    get: function get() {
+      return this.__playbackRate;
+    },
+    set: function set(v) {
+      this.__playbackRate = parseFloat(v) || 1;
+    }
+  }, {
+    key: "interval",
+    get: function get() {
+      return this.__interval;
+    },
+    set: function set(v) {
+      this.__interval = parseInt(v) || 300;
+    }
+  }, {
+    key: "intervalNum",
+    get: function get() {
+      return this.__intervalNum;
+    },
+    set: function set(v) {
+      this.__intervalNum = parseInt(v) || 1;
+    }
+  }, {
+    key: "num",
+    get: function get() {
+      return this.__num;
+    },
+    set: function set(v) {
+      if (v === Infinity || /infinity/i.test(v)) {
+        this.__num = Infinity;
+      } else {
+        this.__num = parseInt(v) || 0;
       }
     }
   }, {
@@ -533,6 +625,7 @@ var FallingFlower = /*#__PURE__*/function (_karas$Component) {
         ref: "fake",
         style: {
           width: 0,
+          height: 0,
           visibility: 'hidden'
         }
       }));

@@ -20,6 +20,7 @@ const {
   },
   util: {
     isNil,
+    isFunction,
   },
   math: {
     geom: {
@@ -44,6 +45,9 @@ class FallingFlower extends karas.Component {
     this.count = 0;
     this.time = 0;
     this.playbackRate = props.playbackRate || 1;
+    this.interval = props.interval || 300;
+    this.intervalNum = props.intervalNum || 1;
+    this.num = props.num || 0;
   }
 
   shouldComponentUpdate() {
@@ -57,21 +61,28 @@ class FallingFlower extends karas.Component {
     this.hashCache = {};
     this.hashMatrix = {};
     this.hashImg = {};
+    this.hashOpacity = {};
+    this.hashTfo = {};
   }
 
   componentDidMount() {
     let { props } = this;
-    let { list = [], num = 0, initNum = 0, interval = 300, intervalNum = 1, delay = 0, autoPlay, fps = 60 } = props;
-    if(num === 'infinity' || num === 'Infinity') {
-      num = Infinity;
-    }
+    let { list = [], initNum = 0, delay = 0, autoPlay } = props;
     let dataList = [];
     let i = 0, length = list.length;
     let lastTime = 0, count = 0;
     let fake = this.ref.fake;
-    let hashCache = this.hashCache = {}, hashMatrix = this.hashMatrix = {}, hashImg = this.hashImg = {};
+    let root = this.root;
+    let hashCache = this.hashCache = {};
+    let hashMatrix = this.hashMatrix = {};
+    let hashImg = this.hashImg = {};
+    let hashOpacity = this.hashOpacity = {};
+    let hashTfo = this.hashTfo = {};
+    let currentTime = 0, maxTime = 0;
+    let hasStart;
     let cb = this.cb = diff => {
       diff *= this.playbackRate;
+      currentTime += diff;
       if(delay > 0) {
         delay -= diff;
       }
@@ -87,7 +98,9 @@ class FallingFlower extends karas.Component {
           i++;
           i %= length;
           count++;
-          dataList.push(this.genItem(list[i]));
+          let o = this.genItem(list[i]);
+          maxTime = Math.max(maxTime, currentTime + o.duration);
+          dataList.push(o);
         }
       }
       // 已有的每个粒子时间增加计算位置，结束的则消失
@@ -100,7 +113,7 @@ class FallingFlower extends karas.Component {
           delete hashMatrix[item.id];
         }
         else if(item.source) {
-          let { x, y, width, height, distance, direction, deg = 90, iterations = 1, time, duration } = item;
+          let { x, y, width, height, distance, direction, iterations = 1, time, duration } = item;
           let percent = time / duration;
           let dy = distance * percent;
           let per = duration / iterations;
@@ -110,19 +123,38 @@ class FallingFlower extends karas.Component {
           item.nowX = x - width * 0.5;
           item.nowY = y + dy - height * 0.5;
           item.loaded = true;
+          hasStart = true;
         }
       }
-      if(count >= num) {
+      // 开始后每次都刷新，即便数据已空，要变成空白初始状态
+      if(hasStart) {
+        fake.clearCache();
+        let p = fake.domParent;
+        while (p) {
+          p.clearCache(true);
+          p = p.domParent;
+        }
+        root.addForceRefreshTask(() => {
+          this.emit('frame');
+        });
+      }
+      if(count >= this.num) {
+        if(currentTime >= maxTime) {
+          fake.removeFrameAnimate(cb);
+        }
         return;
       }
-      if(this.time >= lastTime + interval) {
+      // 每隔interval开始生成这一阶段的粒子数据
+      if(this.time >= lastTime + this.interval) {
         lastTime = this.time;
-        for(let j = 0; j < intervalNum; j++) {
+        for(let j = 0; j < this.intervalNum; j++) {
           i++;
           i %= length;
           count++;
-          dataList.push(this.genItem(list[i]))
-          if(count >= num) {
+          let o = this.genItem(list[i]);
+          maxTime = Math.max(maxTime, currentTime + o.duration);
+          dataList.push(o);
+          if(count >= this.num) {
             break;
           }
         }
@@ -131,26 +163,12 @@ class FallingFlower extends karas.Component {
     if(autoPlay !== false) {
       fake.frameAnimate(cb);
     }
-    let a = this.animation = fake.animate([
-      {
-        opacity: 1,
-      },
-      {
-        opacity: 0,
-      }
-    ], {
-      duration: 1000,
-      delay,
-      iterations: Infinity,
-      autoPlay,
-      fps,
-    });
     let __config = fake.__config;
     __config[NODE_REFRESH_LV] |= REPAINT;
     let shadowRoot = this.shadowRoot;
     let texCache = this.root.texCache;
     fake.render = (renderMode, lv, ctx, cache, dx = 0, dy = 0) => {
-      let time = a.currentTime - delay;
+      let time = currentTime - delay;
       if(time < 0) {
         return;
       }
@@ -162,12 +180,25 @@ class FallingFlower extends karas.Component {
         return;
       }
       let { sx, sy } = fake;
+      let globalAlpha;
+      if(renderMode === CANVAS) {
+        globalAlpha = ctx.globalAlpha;
+      }
+      else if(renderMode === WEBGL) {
+        globalAlpha = computedStyle[OPACITY];
+      }
       dataList.forEach(item => {
         if(item.loaded) {
+          let opacity = globalAlpha;
+          opacity *= item.opacity;
+          // 计算位置
           let x = item.nowX + sx + dx;
           let y = item.nowY + sy + dy;
-          let m = this.matrixEvent;
+          let m = identity();
           let tfo = [x, y + item.origin];
+          if(renderMode === CANVAS) {
+            m = multiply([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tfo[0], tfo[1], 0, 1], m);
+          }
           let r;
           // 左右摇摆为一个时期，前半在一侧后半在另一侧
           if(item.nowPercent >= 0.5) {
@@ -216,18 +247,29 @@ class FallingFlower extends karas.Component {
               t2[5] = item.height / item.sourceHeight;
               m = multiply(m, t2);
             }
-            m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
+            // m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
             hashMatrix[item.id] = m;
+            hashOpacity[item.id] = opacity;
           }
           else if(renderMode === CANVAS) {
+            ctx.globalAlpha = opacity;
+            // canvas处理方式不一样，render的dx和dy包含了total的偏移计算考虑，可以无感知
             m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
+            // 父级的m
+            let pm = this.matrixEvent;
+            if(pm) {
+              m = multiply(pm, m);
+            }
             ctx.setTransform(m[0], m[1], m[4], m[5], m[12], m[13]);
             ctx.drawImage(item.source, x, y, item.width, item.height);
           }
         }
       });
+      if(renderMode === CANVAS) {
+        ctx.globalAlpha = globalAlpha;
+      }
     };
-    fake.__hookGlRender = function(gl, opacity, cx, cy, dx, dy, revertY) {
+    fake.hookGlRender = function(gl, opacity, matrix, cx, cy, dx, dy, revertY) {
       let computedStyle = shadowRoot.computedStyle;
       if(computedStyle[DISPLAY] === 'none'
         || computedStyle[VISIBILITY] === 'hidden'
@@ -236,14 +278,25 @@ class FallingFlower extends karas.Component {
       }
       dataList.forEach(item => {
         if(item.loaded) {
-          texCache.addTexAndDrawWhenLimit(gl, hashCache[item.id], opacity, hashMatrix[item.id], cx, cy, dx, dy, revertY);
+          let id = item.id;
+          let tfo = hashTfo[id].slice(0);
+          tfo[0] += dx;
+          tfo[1] += dy;
+          let m = hashMatrix[id];
+          m = multiply([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tfo[0], tfo[1], 0, 1], m);
+          m = multiply(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -tfo[0], -tfo[1], 0, 1]);
+          // 父级的m
+          if(matrix) {
+            m = multiply(matrix, m);
+          }
+          texCache.addTexAndDrawWhenLimit(gl, hashCache[id], hashOpacity[id], m, cx, cy, dx, dy, revertY);
         }
       });
     };
   }
 
   genItem(item) {
-    let { width, height } = this;
+    let { width, height, props } = this;
     let o = {
       id: uuid++,
       time: 0,
@@ -327,27 +380,28 @@ class FallingFlower extends karas.Component {
               o.height = o.width * res.height / res.width;
             }
           }
+          else {
+            o.width = res.width;
+            o.height = res.height;
+          }
           if(o.height) {
             o.origin *= o.height;
           }
         }
       });
     }
+    if(props.hookData && isFunction(props.hookData)) {
+      o = props.hookData(o);
+    }
     return o;
   }
 
   pause() {
     this.ref.fake.removeFrameAnimate(this.cb);
-    if(this.animation) {
-      this.animation.pause();
-    }
   }
 
   resume() {
     this.ref.fake.frameAnimate(this.cb);
-    if(this.animation) {
-      this.animation.resume();
-    }
   }
 
   play() {
@@ -355,15 +409,48 @@ class FallingFlower extends karas.Component {
     this.time = 0;
     this.ref.fake.removeFrameAnimate(this.cb);
     this.ref.fake.frameAnimate(this.cb);
-    if(this.animation) {
-      this.animation.play();
+  }
+
+  get playbackRate() {
+    return this.__playbackRate;
+  }
+
+  set playbackRate(v) {
+    this.__playbackRate = parseFloat(v) || 1;
+  }
+
+  get interval() {
+    return this.__interval;
+  }
+
+  get intervalNum() {
+    return this.__intervalNum;
+  }
+
+  set intervalNum(v) {
+    this.__intervalNum = parseInt(v) || 1;
+  }
+
+  set interval(v) {
+    this.__interval = parseInt(v) || 300;
+  }
+
+  get num() {
+    return this.__num;
+  }
+
+  set num(v) {
+    if(v === Infinity || /infinity/i.test(v)) {
+      this.__num = Infinity;
+    }
+    else {
+      this.__num = parseInt(v) || 0;
     }
   }
 
   render() {
     return <div>
-      {/*<img src="https://gw.alipayobjects.com/mdn/rms_5f8aad/afts/img/A*W7jURJYPDdgAAAAAAAAAAAAAARQnAQ"/>*/}
-      <$polyline ref="fake" style={{width:0,visibility:'hidden'}}/>
+      <$polyline ref="fake" style={{width:0,height:0,visibility:'hidden'}}/>
     </div>;
   }
 }

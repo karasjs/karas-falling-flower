@@ -41,8 +41,8 @@ karas.render(
                      },
                    }]} // 粒子随机选择位图
                    num={100} // 粒子总数限制
-                   initNum={30} // 初始粒子数量，默认0
-                   interval={100} // 每轮发射间隔
+                   initNum={1} // 初始粒子数量，默认0
+                   interval={1000} // 每轮发射间隔
                    intervalNum={1} // 每轮发射数量
                    delay={500} // 播放延迟
                    playbackRate={1} // 播放速率
@@ -53,12 +53,18 @@ karas.render(
 ```
 
 ### method
-* pause()
-* resume()
-* play()
+* pause() 暂停
+* resume() 恢复
+* play() 从头播放
 
 ### get/set
 * playbackRate 播放速率
+* interval 发射间隔
+* intervalNum 每轮发射数量
+* num 总粒子数量
+
+### event
+* frame 每次刷新后触发
 
 # License
 [MIT License]
