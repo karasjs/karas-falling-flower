@@ -1,7 +1,7 @@
 (function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('karas')) :
   typeof define === 'function' && define.amd ? define(['karas'], factory) :
-  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.FallingFlower = factory(global.karas));
+  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.ParticleLaunch = factory(global.karas));
 })(this, (function (karas) { 'use strict';
 
   function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
@@ -117,7 +117,7 @@
     };
   }
 
-  var version = "0.3.0";
+  var version = "0.3.1";
 
   var _karas$enums = karas__default["default"].enums,
       _karas$enums$STYLE_KE = _karas$enums.STYLE_KEY,
