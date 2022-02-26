@@ -5,7 +5,7 @@ import json from '@rollup/plugin-json';
 export default [{
   input: 'src/index.js',
   output: {
-    name: 'ParticleLaunch',
+    name: 'FallingFlower',
     file: 'index.es.js',
     format: 'es',
     sourcemap: true,
@@ -20,7 +20,7 @@ export default [{
 }, {
   input: 'src/index.js',
   output: {
-    name: 'ParticleLaunch',
+    name: 'FallingFlower',
     file: 'index.js',
     format: 'umd',
     sourcemap: true,
@@ -35,22 +35,7 @@ export default [{
 }, {
   input: 'src/index.js',
   output: {
-    name: 'ParticleLaunch',
-    file: 'index.es.js',
-    format: 'es',
-    sourcemap: true,
-  },
-  plugins: [
-    babel({
-      exclude: 'node_modules/**', // 只编译我们的源代码
-      runtimeHelpers: true
-    }),
-    json(),
-  ],
-}, {
-  input: 'src/index.js',
-  output: {
-    name: 'ParticleLaunch',
+    name: 'FallingFlower',
     file: 'index.min.js',
     format: 'umd',
     sourcemap: true,

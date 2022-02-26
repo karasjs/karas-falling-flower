@@ -109,7 +109,7 @@ function _createSuper(Derived) {
   };
 }
 
-var version = "0.3.1";
+var version = "0.3.2";
 
 var _karas$enums = karas.enums,
     _karas$enums$STYLE_KE = _karas$enums.STYLE_KEY,

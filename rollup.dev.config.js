@@ -4,7 +4,7 @@ import json from '@rollup/plugin-json';
 export default [{
   input: 'src/index.js',
   output: {
-    name: 'ParticleLaunch',
+    name: 'FallingFlower',
     file: 'index.es.js',
     format: 'es',
     sourcemap: true,
